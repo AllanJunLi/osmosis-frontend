@@ -1,5 +1,5 @@
-import { Dec, PricePretty } from "@keplr-wallet/unit";
 import { DEFAULT_VS_CURRENCY } from "@osmosis-labs/server";
+import { Dec, PricePretty } from "@osmosis-labs/unit";
 import { formatICNSName, shorten } from "@osmosis-labs/utils";
 import classNames from "classnames";
 import { observer } from "mobx-react-lite";
@@ -138,7 +138,7 @@ export const ProfileModal: FunctionComponent<
         onAfterClose={() => {
           setShow1CTSettings(false);
         }}
-        className="relative max-h-screen overflow-hidden"
+        className="relative max-h-screen overflow-hidden sm:mx-0"
       >
         <div className="flex flex-col items-center overflow-auto">
           {show1CT && show1CTSettings ? (
@@ -279,15 +279,7 @@ export const ProfileModal: FunctionComponent<
                       <span>{t("buyTokens")}</span>
                     </button>
 
-                    <Link
-                      href={
-                        featureFlags.portfolioPageAndNewAssetsPage
-                          ? "/portfolio"
-                          : "/assets"
-                      }
-                      passHref
-                      legacyBehavior
-                    >
+                    <Link href="/portfolio" passHref legacyBehavior>
                       <ArrowButton isLink>
                         {t("profile.viewAllAssets")}
                       </ArrowButton>
@@ -555,9 +547,6 @@ const OneClickTradingProfileSection: FunctionComponent<{
                   spendLimitTokenDecimals:
                     oneClickTradingInfo.spendLimit.decimals,
                   transaction1CTParams,
-                  walletRepo: accountStore.getWalletRepo(
-                    accountStore.osmosisChainId
-                  ),
                   /**
                    * If the user has an existing session, remove it and add the new one.
                    */

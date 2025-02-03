@@ -1,6 +1,6 @@
-import { Dec, Int } from "@keplr-wallet/unit";
 import { tickToPrice } from "@osmosis-labs/math";
 import { AssetList, Chain } from "@osmosis-labs/types";
+import { Dec, Int } from "@osmosis-labs/unit";
 import { getAssetFromAssetList } from "@osmosis-labs/utils";
 import cachified, { CacheEntry } from "cachified";
 import dayjs from "dayjs";
@@ -30,7 +30,7 @@ export function getOrderbookHistoricalOrders({
   return cachified({
     cache: orderbookHistoricalOrdersCache,
     key: `orderbookHistoricalOrders-${userOsmoAddress}`,
-    ttl: 1000 * 2, // 2 seconds
+    ttl: 1000 * 5, // 5 seconds
     getFreshValue: () =>
       queryHistoricalOrders(userOsmoAddress).then(async (data) => {
         const orders = data;
@@ -139,12 +139,11 @@ async function mapHistoricalToMapped(
       order_direction: o.order_direction,
       order_id: parseInt(o.order_id),
       owner: userAddress,
-      placed_at:
-        dayjs(
-          o.place_timestamp && o.place_timestamp.length > 0
-            ? o.place_timestamp
-            : 0
-        ).unix() * 1000,
+      placed_at: dayjs(
+        o.place_timestamp && o.place_timestamp.length > 0
+          ? o.place_timestamp
+          : 0
+      ).unix(),
       placed_quantity: parseInt(o.quantity),
       placedQuantityMin,
       quantityMin,

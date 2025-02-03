@@ -1,5 +1,5 @@
-import { CoinPretty, Dec, Int, PricePretty } from "@keplr-wallet/unit";
 import { DEFAULT_VS_CURRENCY, MappedLimitOrder } from "@osmosis-labs/server";
+import { CoinPretty, Dec, Int, PricePretty } from "@osmosis-labs/unit";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import classNames from "classnames";
 import dayjs from "dayjs";
@@ -26,8 +26,8 @@ import {
   useWindowSize,
 } from "~/hooks";
 import {
-  useOrderbookAllActiveOrders,
   useOrderbookClaimableOrders,
+  useOrderbookOrders,
 } from "~/hooks/limit-orders/use-orderbook";
 import { useStore } from "~/stores";
 import {
@@ -81,12 +81,11 @@ export const OrderHistory = observer(() => {
     hasNextPage,
     refetch,
     isRefetching,
-  } = useOrderbookAllActiveOrders({
+  } = useOrderbookOrders({
     userAddress: wallet?.address ?? "",
     pageSize: 20,
-    refetchInterval: 15000,
+    refetchInterval: featureFlags.sqsActiveOrders ? 10000 : 30000,
   });
-
   const groupedOrders = useMemo(() => groupOrdersByStatus(orders), [orders]);
   const groups = useMemo(
     () =>
@@ -116,15 +115,16 @@ export const OrderHistory = observer(() => {
     scrollMargin: listRef.current?.offsetTop ?? 0,
     paddingStart: 45,
   });
+  const filledOrdersInDisplay = useMemo(() => {
+    return orders.filter((o) => o.status === "filled");
+  }, [orders]);
 
-  const filledOrders = orders.filter((o) => o.status === "filled");
-  const filledOrdersCount = filledOrders.length;
-
-  const { claimAllOrders } = useOrderbookClaimableOrders({
-    userAddress: wallet?.address ?? "",
-    disabled: isLoading || orders.length === 0 || isRefetching,
-    orders: filledOrders,
-  });
+  const { claimAllOrders, count: filledOrdersCount } =
+    useOrderbookClaimableOrders({
+      userAddress: wallet?.address ?? "",
+      disabled: isLoading || filledOrdersInDisplay.length === 0 || isRefetching,
+      refetchInterval: featureFlags.sqsActiveOrders ? 10000 : 30000,
+    });
 
   const claimOrders = useCallback(async () => {
     try {
@@ -220,14 +220,7 @@ export const OrderHistory = observer(() => {
       >
         {!isLoading && (
           <thead className="border-b border-osmoverse-700 bg-osmoverse-1000">
-            <tr
-              className={classNames(
-                {
-                  "!bg-osmoverse-1000": featureFlags.limitOrders,
-                },
-                gridClasses
-              )}
-            >
+            <tr className={classNames("bg-osmoverse-1000", gridClasses)}>
               {headers.map((header) => (
                 <th
                   key={header}
@@ -433,7 +426,7 @@ const TableOrderRow = memo(
       baseAsset?.rawAsset.logoURIs.png ??
       "";
 
-    const placedAt = dayjs(placed_at);
+    const placedAt = dayjs.unix(placed_at);
     const formattedTime = placedAt.format("h:mm A");
     const formattedDate = placedAt.format("MMM D");
 
@@ -456,8 +449,8 @@ const TableOrderRow = memo(
         case "partiallyFilled":
           return <OrderProgressBar order={order} />;
         case "cancelled":
-          const dayDiff = dayjs(new Date()).diff(dayjs(placed_at), "d");
-          const hourDiff = dayjs(new Date()).diff(dayjs(placed_at), "h");
+          const dayDiff = dayjs(new Date()).diff(placedAt, "d");
+          const hourDiff = dayjs(new Date()).diff(placedAt, "h");
 
           return (
             <span className="body2 md:caption text-osmoverse-300">

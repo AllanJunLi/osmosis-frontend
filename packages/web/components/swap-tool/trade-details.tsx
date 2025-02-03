@@ -1,7 +1,7 @@
 import { Disclosure } from "@headlessui/react";
-import { Dec, PricePretty, RatePretty } from "@keplr-wallet/unit";
 import { EmptyAmountError } from "@osmosis-labs/keplr-hooks";
 import { DEFAULT_VS_CURRENCY } from "@osmosis-labs/server";
+import { Dec, PricePretty, RatePretty } from "@osmosis-labs/unit";
 import classNames from "classnames";
 import { observer } from "mobx-react-lite";
 import { useEffect, useMemo, useState } from "react";
@@ -347,7 +347,7 @@ export const TradeDetails = observer(
   }
 );
 
-export function Closer({
+function Closer({
   close,
   isInAmountEmpty,
 }: {
@@ -363,7 +363,7 @@ export function Closer({
   return <></>;
 }
 
-export function ExpectedRate(
+function ExpectedRate(
   swapState: ReturnType<typeof useSwap>,
   outAsBase: boolean,
   treatAsStable: string | undefined = undefined,

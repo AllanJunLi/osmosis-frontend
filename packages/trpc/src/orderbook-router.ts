@@ -1,8 +1,8 @@
-import { Dec, Int } from "@keplr-wallet/unit";
 import { tickToPrice } from "@osmosis-labs/math";
 import {
   CursorPaginationSchema,
   getOrderbookActiveOrders,
+  getOrderbookActiveOrdersSQS,
   getOrderbookHistoricalOrders,
   getOrderbookMakerFee,
   getOrderbookPools,
@@ -11,13 +11,19 @@ import {
   maybeCachePaginatedItems,
   OrderStatus,
 } from "@osmosis-labs/server";
+import { Dec, Int } from "@osmosis-labs/unit";
 import { getAssetFromAssetList } from "@osmosis-labs/utils";
+import { z } from "zod";
 
 import { createTRPCRouter, publicProcedure } from "./api";
 import { OsmoAddressSchema, UserOsmoAddressSchema } from "./parameter-types";
 
 const GetInfiniteLimitOrdersInputSchema = CursorPaginationSchema.merge(
   UserOsmoAddressSchema.required()
+).merge(
+  z.object({
+    filter: z.enum(["open", "filled", "historical", "active"]).optional(),
+  })
 );
 
 const orderStatusOrder: Record<OrderStatus, number> = {
@@ -106,7 +112,51 @@ export const orderbookRouter = createTRPCRouter({
           return allOrders.sort(defaultSortOrders);
         },
         cacheKey: `all-active-orders-${input.userOsmoAddress}`,
-        ttl: 2000,
+        ttl: 15000,
+        cursor: input.cursor,
+        limit: input.limit,
+      });
+    }),
+  getAllOrdersSQS: publicProcedure
+    .input(GetInfiniteLimitOrdersInputSchema)
+    .query(async ({ input, ctx }) => {
+      return maybeCachePaginatedItems({
+        getFreshItems: async () => {
+          const { userOsmoAddress, filter } = input;
+
+          const shouldFetchActive =
+            !filter ||
+            filter === "open" ||
+            filter === "filled" ||
+            filter === "active";
+          const shouldFetchHistorical = !filter || filter === "historical";
+          const promises: Promise<MappedLimitOrder[]>[] = [];
+          if (shouldFetchActive) {
+            promises.push(
+              getOrderbookActiveOrdersSQS({
+                userOsmoAddress,
+                assetList: ctx.assetLists,
+              })
+            );
+          }
+          if (shouldFetchHistorical) {
+            promises.push(
+              getOrderbookHistoricalOrders({
+                userOsmoAddress,
+                assetLists: ctx.assetLists,
+                chainList: ctx.chainList,
+              })
+            );
+          }
+          const orders = await Promise.all(promises);
+          const allOrders = orders.flat().sort(defaultSortOrders);
+          if (filter === "filled") {
+            return allOrders.filter((o) => o.status === "filled");
+          }
+          return allOrders;
+        },
+        cacheKey: `all-active-orders-sqs-${input.userOsmoAddress}`,
+        ttl: 10000,
         cursor: input.cursor,
         limit: input.limit,
       });

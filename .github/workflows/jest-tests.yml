@@ -9,7 +9,18 @@ jobs:
       matrix:
         node-version: [20.x]
         package:
-          ["web", "utils", "server", "stores", "pools", "math", "bridge", "tx"]
+          [
+            "web",
+            "utils",
+            "server",
+            "stores",
+            "pools",
+            "math",
+            "bridge",
+            "tx",
+            "proto-codecs",
+            "unit",
+          ]
 
     steps:
       - name: Checkout Repo

@@ -6,12 +6,12 @@ import {
   type TokensResponse,
   type TransactionRequest,
 } from "@0xsquid/sdk";
-import { Dec } from "@keplr-wallet/unit";
 import {
   makeExecuteCosmwasmContractMsg,
   makeIBCTransferMsg,
 } from "@osmosis-labs/tx";
 import { CosmosCounterparty, EVMCounterparty } from "@osmosis-labs/types";
+import { Dec } from "@osmosis-labs/unit";
 import {
   apiClient,
   ApiClientError,
@@ -38,6 +38,7 @@ import {
   BridgeProvider,
   BridgeProviderContext,
   BridgeQuote,
+  BridgeSupportedAsset,
   BridgeTransactionRequest,
   CosmosBridgeTransactionRequest,
   EvmBridgeTransactionRequest,
@@ -45,7 +46,7 @@ import {
   GetBridgeQuoteParams,
   GetBridgeSupportedAssetsParams,
 } from "../interface";
-import { BridgeAssetMap } from "../utils";
+import { BridgeAssetMap } from "../utils/asset";
 import { getSquidErrors } from "./error";
 
 const IbcTransferType = "/ibc.applications.transfer.v1.MsgTransfer";
@@ -239,6 +240,7 @@ export class SquidBridgeProvider implements BridgeProvider {
                   chainId: feeCosts[0].token.chainId,
                   decimals: feeCosts[0].token.decimals,
                   address: feeCosts[0].token.address,
+                  coinGeckoId: feeCosts[0].token.coingeckoId,
                 }
               : {
                   ...fromAsset,
@@ -253,6 +255,7 @@ export class SquidBridgeProvider implements BridgeProvider {
                   amount: gasCosts[0].amount,
                   decimals: gasCosts[0].token.decimals,
                   address: gasCosts[0].token.address,
+                  coinGeckoId: gasCosts[0].token.coingeckoId,
                 }
               : {
                   ...fromAsset,
@@ -289,7 +292,9 @@ export class SquidBridgeProvider implements BridgeProvider {
   async getSupportedAssets({
     chain,
     asset,
-  }: GetBridgeSupportedAssetsParams): Promise<(BridgeChain & BridgeAsset)[]> {
+  }: GetBridgeSupportedAssetsParams): Promise<
+    (BridgeChain & BridgeSupportedAsset)[]
+  > {
     try {
       const [tokens, chains] = await Promise.all([
         this.getTokens(),
@@ -305,7 +310,9 @@ export class SquidBridgeProvider implements BridgeProvider {
 
       if (!token) throw new Error("Token not found: " + asset.address);
 
-      const foundVariants = new BridgeAssetMap<BridgeChain & BridgeAsset>();
+      const foundVariants = new BridgeAssetMap<
+        BridgeChain & BridgeSupportedAsset
+      >();
 
       // asset list counterparties
       const assetListAsset = this.ctx.assetLists
@@ -334,6 +341,7 @@ export class SquidBridgeProvider implements BridgeProvider {
           const c = counterparty as CosmosCounterparty;
 
           foundVariants.setAsset(c.chainId, address, {
+            transferTypes: ["quote"],
             chainId: c.chainId,
             chainType: "cosmos",
             address: address,
@@ -346,6 +354,7 @@ export class SquidBridgeProvider implements BridgeProvider {
           const c = counterparty as EVMCounterparty;
 
           foundVariants.setAsset(c.chainId.toString(), address, {
+            transferTypes: ["quote"],
             chainId: c.chainId,
             chainType: "evm",
             address: address,
@@ -388,6 +397,7 @@ export class SquidBridgeProvider implements BridgeProvider {
         foundVariants.setAsset(variant.chainId.toString(), variant.address, {
           // squid chain list IDs are canonical
           ...chainInfo,
+          transferTypes: ["quote"],
           chainName: variant.chainName,
           denom: variant.symbol,
           address: variant.address,
@@ -561,8 +571,7 @@ export class SquidBridgeProvider implements BridgeProvider {
 
         return {
           type: "cosmos",
-          msgTypeUrl: typeUrl,
-          msg,
+          msgs: [{ typeUrl, value: msg }],
           gasFee,
         };
       } else if (parsedData.msgTypeUrl === WasmTransferType) {
@@ -585,8 +594,7 @@ export class SquidBridgeProvider implements BridgeProvider {
 
         return {
           type: "cosmos",
-          msgTypeUrl: typeUrl,
-          msg,
+          msgs: [{ typeUrl, value: msg }],
           gasFee,
         };
       }

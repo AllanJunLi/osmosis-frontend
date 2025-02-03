@@ -1,4 +1,4 @@
-import { Range } from "@osmosis-labs/server/src/queries/complex/portfolio/portfolio";
+import type { Range } from "@osmosis-labs/server";
 import { AreaData, Time } from "lightweight-charts";
 
 import { Icon } from "~/components/assets";
@@ -37,7 +37,7 @@ export const PortfolioHistoricalChart = ({
   setIsChartMinimized,
 }: PortfolioHistoricalChartProps) => {
   const { t } = useTranslation();
-  const { logEvent } = useAmplitudeAnalytics();
+  const { logEvent, getLastEvent } = useAmplitudeAnalytics();
 
   return (
     <section className="relative flex h-[468px] max-h-[468px] flex-col justify-between">
@@ -54,7 +54,14 @@ export const PortfolioHistoricalChart = ({
             onPointerHover={(value, time) => {
               setShowDate(true);
               setDataPoint({ value, time });
-              logEvent([EventName.Portfolio.chartInteraction]);
+
+              const lastEvent = getLastEvent();
+              // Avoid logging subsequent chartInteraction events to prevent Amplitude overload
+              if (
+                lastEvent?.eventName !== EventName.Portfolio.chartInteraction
+              ) {
+                logEvent([EventName.Portfolio.chartInteraction]);
+              }
             }}
             onPointerOut={resetDataPoint}
           />

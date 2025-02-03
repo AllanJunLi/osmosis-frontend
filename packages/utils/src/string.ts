@@ -1,4 +1,5 @@
 import * as cosmjsEncoding from "@cosmjs/encoding";
+import * as bitcoin from "bitcoinjs-lib";
 import * as viem from "viem";
 
 /** Trucates a string with ellipsis, default breakpoint: `num = 8`. */
@@ -73,6 +74,47 @@ export function isEvmAddressValid({ address }: { address: string }): boolean {
   return viem.isAddress(address);
 }
 
+export function isBitcoinAddressValid({
+  address,
+  env,
+}: {
+  address: string;
+  env: "mainnet" | "testnet";
+}): boolean {
+  try {
+    // Attempt to decode the address
+    const decoded = bitcoin.address.fromBase58Check(address);
+    const isTestnet =
+      decoded.version === bitcoin.networks.testnet.pubKeyHash ||
+      decoded.version === bitcoin.networks.testnet.scriptHash;
+    const isMainnet =
+      decoded.version === bitcoin.networks.bitcoin.pubKeyHash ||
+      decoded.version === bitcoin.networks.bitcoin.scriptHash;
+
+    if ((env === "mainnet" && isMainnet) || (env === "testnet" && isTestnet)) {
+      return true; // Address is valid for the given environment
+    }
+    return false; // Address is invalid for the given environment
+  } catch (e) {
+    try {
+      // If Base58 decoding fails, try Bech32 decoding
+      const decoded = bitcoin.address.fromBech32(address);
+      const isTestnet = decoded.prefix === "tb" || decoded.prefix === "bcrt";
+      const isMainnet = decoded.prefix === "bc";
+
+      if (
+        (env === "mainnet" && isMainnet) ||
+        (env === "testnet" && isTestnet)
+      ) {
+        return true; // Address is valid for the given environment
+      }
+      return false; // Address is invalid for the given environment
+    } catch (e) {
+      return false; // Address is invalid
+    }
+  }
+}
+
 export function isCosmosAddressValid({
   address,
   bech32Prefix,
@@ -89,4 +131,21 @@ export function isCosmosAddressValid({
   } catch {
     return false;
   }
+}
+
+export function deriveCosmosAddress({
+  address,
+  desiredBech32Prefix,
+}: {
+  address: string;
+  desiredBech32Prefix: string;
+}) {
+  const { data } = cosmjsEncoding.fromBech32(address);
+  return cosmjsEncoding.toBech32(desiredBech32Prefix, data);
+}
+
+export function camelToKebabCase(str: string): string {
+  return str
+    .replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)
+    .replace(/^-/, "");
 }

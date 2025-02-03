@@ -1,4 +1,4 @@
-import { DecUtils } from "@keplr-wallet/unit";
+import { DecUtils } from "@osmosis-labs/unit";
 import { isNil, shorten } from "@osmosis-labs/utils";
 import classNames from "classnames";
 import { FunctionComponent, PropsWithChildren } from "react";
@@ -9,7 +9,7 @@ import { t } from "~/hooks";
 import { trimPlaceholderZeros } from "~/utils/number";
 
 import { BridgeProviderDropdown } from "./bridge-provider-dropdown";
-import { BridgeQuoteRemainingTime } from "./bridge-quote-remaining-time";
+import { QueryRemainingTime } from "./query-remaining-time";
 import { BridgeQuote } from "./use-bridge-quotes";
 
 export const BridgeProviderDropdownRow: FunctionComponent<{
@@ -54,7 +54,7 @@ export const ProviderFeesRow: FunctionComponent<{
   isRefetchingQuote: boolean;
 }> = ({ selectedQuote, isRefetchingQuote }) => {
   const gasElement = `${trimPlaceholderZeros(
-    selectedQuote.transferFee.hideDenom(true).maxDecimals(4).toString()
+    selectedQuote.transferFee.hideDenom(true).maxDecimals(6).toString()
   )} ${shorten(selectedQuote.transferFee.denom, {
     prefixLength: 8,
     suffixLength: 3,
@@ -73,14 +73,14 @@ export const ProviderFeesRow: FunctionComponent<{
             <>
               {selectedQuote.transferFeeFiat.toString()}{" "}
               <span
-                title={selectedQuote.transferFee.maxDecimals(4).toString()}
+                title={selectedQuote.transferFee.maxDecimals(6).toString()}
                 className="text-osmoverse-300"
               >
                 ({gasElement})
               </span>
             </>
           ) : (
-            <span title={selectedQuote.transferFee.maxDecimals(4).toString()}>
+            <span title={selectedQuote.transferFee.maxDecimals(6).toString()}>
               {gasElement}
             </span>
           )}
@@ -117,16 +117,16 @@ export const NetworkFeeRow: FunctionComponent<{
         <>
           {selectedQuote.gasCostFiat
             ? selectedQuote.gasCostFiat.toString()
-            : selectedQuote.gasCost?.maxDecimals(4).toString()}
+            : selectedQuote.gasCost?.maxDecimals(6).toString()}
           {selectedQuote.gasCostFiat && selectedQuote.gasCost ? (
             <span
-              title={selectedQuote.gasCost.maxDecimals(4).toString()}
+              title={selectedQuote.gasCost.maxDecimals(6).toString()}
               className="text-osmoverse-300"
             >
               {" "}
               (
               {trimPlaceholderZeros(
-                selectedQuote.gasCost.hideDenom(true).maxDecimals(4).toString()
+                selectedQuote.gasCost.hideDenom(true).maxDecimals(6).toString()
               )}{" "}
               <span>
                 {shorten(selectedQuote.gasCost.denom, {
@@ -175,7 +175,7 @@ export const ExpectedOutputRow: FunctionComponent<{
       {selectedQuote.expectedOutputFiat.toString()}{" "}
       <span
         title={selectedQuote.expectedOutput
-          .maxDecimals(4)
+          .maxDecimals(6)
           .trim(true)
           .toString()}
         className={classNames({
@@ -185,7 +185,7 @@ export const ExpectedOutputRow: FunctionComponent<{
         (
         {trimPlaceholderZeros(
           selectedQuote.expectedOutput
-            .maxDecimals(4)
+            .maxDecimals(6)
             .trim(true)
             .hideDenom(true)
             .toString()
@@ -229,7 +229,7 @@ export const ExpandDetailsControlContent: FunctionComponent<{
   return (
     <div className="flex items-center gap-2 md:gap-1">
       {!isNil(selectedQuoteUpdatedAt) && showRemainingTime && (
-        <BridgeQuoteRemainingTime
+        <QueryRemainingTime
           dataUpdatedAt={selectedQuoteUpdatedAt}
           refetchInterval={refetchInterval}
           isPaused={isRemainingTimePaused}

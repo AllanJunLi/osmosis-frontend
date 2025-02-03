@@ -1,5 +1,5 @@
-import { CoinPretty, Dec, Int, PricePretty } from "@keplr-wallet/unit";
 import { DEFAULT_VS_CURRENCY, MappedLimitOrder } from "@osmosis-labs/server";
+import { CoinPretty, Dec, Int, PricePretty } from "@osmosis-labs/unit";
 import classNames from "classnames";
 import dayjs from "dayjs";
 import { observer } from "mobx-react-lite";
@@ -69,11 +69,14 @@ const OrderDetails = observer(
         : order.baseAsset;
     }, [order]);
 
-    const formattedMonth = dayjs(order?.placed_at).format("MMMM").slice(0, 3);
+    const formattedMonth = dayjs
+      .unix(order?.placed_at ?? 0)
+      .format("MMMM")
+      .slice(0, 3);
 
-    const formattedDateDayYearHourMinute = dayjs(order?.placed_at).format(
-      "DD, YYYY, HH:mm"
-    );
+    const formattedDateDayYearHourMinute = dayjs
+      .unix(order?.placed_at ?? 0)
+      .format("DD, YYYY, HH:mm");
 
     const formattedDate = `${formattedMonth} ${formattedDateDayYearHourMinute}`;
 

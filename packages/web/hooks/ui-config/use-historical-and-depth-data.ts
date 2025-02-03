@@ -1,4 +1,3 @@
-import { Dec, DecUtils, Int } from "@keplr-wallet/unit";
 import {
   BigDec,
   maxSpotPrice,
@@ -13,6 +12,7 @@ import type {
   TokenPairHistoricalPrice,
 } from "@osmosis-labs/server";
 import { Currency } from "@osmosis-labs/types";
+import { Dec, DecUtils, Int } from "@osmosis-labs/unit";
 import { action, autorun, computed, makeObservable, observable } from "mobx";
 import { useEffect, useState } from "react";
 
@@ -33,7 +33,7 @@ export function useHistoricalAndLiquidityData(
     [config]
   );
 
-  const { data: pool } = api.edge.pools.getPool.useQuery(
+  const { data: pool } = api.local.pools.getPool.useQuery(
     {
       poolId,
     },

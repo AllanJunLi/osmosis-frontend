@@ -1,12 +1,12 @@
-import { CoinPretty } from "@keplr-wallet/unit";
-import type { Bridge } from "@osmosis-labs/bridge";
+import type { Bridge, BridgeSupportedAsset } from "@osmosis-labs/bridge";
+import { CoinPretty } from "@osmosis-labs/unit";
 import { isNil, noop } from "@osmosis-labs/utils";
 import { observer } from "mobx-react-lite";
 import { useMemo, useState } from "react";
 import { getAddress } from "viem";
 
 import { Screen, useScreenManager } from "~/components/screen-manager";
-import { EventName } from "~/config";
+import { EventName, OUTLIER_USD_VALUE_THRESHOLD } from "~/config";
 import { useAmplitudeAnalytics } from "~/hooks";
 import { BridgeScreen } from "~/hooks/bridge";
 import { useEvmWalletAccount } from "~/hooks/evm-wallet";
@@ -16,25 +16,25 @@ import { api } from "~/utils/trpc";
 
 import { AmountScreen } from "./amount-screen";
 import { ReviewScreen } from "./review-screen";
-import { QuotableBridge, useBridgeQuotes } from "./use-bridge-quotes";
+import { useBridgeQuotes } from "./use-bridge-quotes";
 import {
   SupportedAsset,
   useBridgesSupportedAssets,
 } from "./use-bridges-supported-assets";
 
 export type SupportedAssetWithAmount = SupportedAsset & { amount: CoinPretty };
+export type SupportedBridgeInfo = {
+  allBridges: Bridge[];
+  quoteBridges: Bridge[];
+  externalUrlBridges: Bridge[];
+  depositAddressBridges: Bridge[];
+};
 
 interface AmountAndConfirmationScreenProps {
   direction: "deposit" | "withdraw";
   selectedAssetDenom: string | undefined;
   onClose: () => void;
 }
-
-const unsupportedBridges: Exclude<Bridge, QuotableBridge>[] = [
-  "Nomic",
-  "Wormhole",
-  "Nitro",
-];
 
 export const AmountAndReviewScreen = observer(
   ({
@@ -102,7 +102,7 @@ export const AmountAndReviewScreen = observer(
         : toChainCosmosAccount?.walletInfo.name;
 
     const { data: assetsInOsmosis, isLoading: isLoadingAssetsInOsmosis } =
-      api.edge.assets.getCanonicalAssetWithVariants.useQuery(
+      api.edge.assets.getBridgeAssetWithVariants.useQuery(
         {
           findMinDenomOrSymbol: selectedAssetDenom ?? "",
         },
@@ -133,33 +133,71 @@ export const AmountAndReviewScreen = observer(
         chainId: accountStore.osmosisChainId,
         chainType: "cosmos",
       },
+      direction,
     });
+
     const { supportedAssetsByChainId: counterpartySupportedAssetsByChainId } =
       supportedAssets;
 
-    /** Filter for bridges for the current to/from chain/asset selection. */
-    const bridges = useMemo(() => {
-      if (!fromAsset || !toAsset || !fromChain || !toChain) return [];
+    const hasSupportedChains =
+      !supportedAssets.isLoading && supportedAssets.supportedChains.length > 0;
 
-      const assetSupportedBridges = new Set<Bridge>();
+    /** Filter for bridges for the current to/from chain/asset selection. */
+    const supportedBridgeInfo = useMemo<SupportedBridgeInfo>(() => {
+      if (!fromAsset || !toAsset || !fromChain || !toChain)
+        return {
+          allBridges: [],
+          quoteBridges: [],
+          externalUrlBridges: [],
+          depositAddressBridges: [],
+        };
+
+      const bridgeInfo = {
+        allBridges: new Set<Bridge>(),
+        depositAddressBridges: new Set<Bridge>(),
+        quoteBridges: new Set<Bridge>(),
+        externalUrlBridges: new Set<Bridge>(),
+      };
+
+      const addToBridgeInfo = (
+        bridge: Bridge,
+        variants: BridgeSupportedAsset["transferTypes"]
+      ) => {
+        if (variants.includes("quote")) {
+          bridgeInfo.quoteBridges.add(bridge as Bridge);
+        }
+        if (variants.includes("external-url")) {
+          bridgeInfo.externalUrlBridges.add(bridge as Bridge);
+        }
+        if (variants.includes("deposit-address")) {
+          bridgeInfo.depositAddressBridges.add(bridge as Bridge);
+        }
+        bridgeInfo.allBridges.add(bridge as Bridge);
+      };
 
       if (direction === "deposit") {
-        const providers = fromAsset.supportedVariants[toAsset.address] ?? [];
-        providers.forEach((provider) => assetSupportedBridges.add(provider));
+        Object.entries(fromAsset.supportedVariants[toAsset.address]).forEach(
+          ([bridge, variants]) => addToBridgeInfo(bridge as Bridge, variants)
+        );
       } else if (direction === "withdraw") {
         const counterpartyAssets =
           counterpartySupportedAssetsByChainId[toAsset.chainId];
         counterpartyAssets
           ?.filter(({ address }) => address === toAsset.address)
           .forEach((asset) => {
-            const providers = asset.supportedVariants[fromAsset.address] ?? [];
-            providers.forEach((provider) =>
-              assetSupportedBridges.add(provider)
+            Object.entries(asset.supportedVariants[fromAsset.address]).forEach(
+              ([bridge, variants]) =>
+                addToBridgeInfo(bridge as Bridge, variants)
             );
           });
       }
 
-      return Array.from(assetSupportedBridges);
+      return {
+        allBridges: Array.from(bridgeInfo.allBridges),
+        quoteBridges: Array.from(bridgeInfo.quoteBridges),
+        externalUrlBridges: Array.from(bridgeInfo.externalUrlBridges),
+        depositAddressBridges: Array.from(bridgeInfo.depositAddressBridges),
+      };
     }, [
       direction,
       fromAsset,
@@ -168,23 +206,6 @@ export const AmountAndReviewScreen = observer(
       toChain,
       counterpartySupportedAssetsByChainId,
     ]);
-    /**
-     * Only some bridges support quoting.
-     * It's also important to only return bridges
-     * that support the current to/from assets by extracting the bridges
-     * from the supported bridges mapping.
-     */
-    const quoteBridges = useMemo(
-      () =>
-        bridges.filter(
-          (bridge) =>
-            !unsupportedBridges.includes(
-              // @ts-expect-error
-              bridge
-            )
-        ) as QuotableBridge[],
-      [bridges]
-    );
 
     const quote = useBridgeQuotes({
       toAddress,
@@ -231,7 +252,7 @@ export const AmountAndReviewScreen = observer(
       direction,
       onRequestClose: onClose,
       inputAmount: cryptoAmount,
-      bridges: quoteBridges,
+      bridges: supportedBridgeInfo.quoteBridges,
       onTransfer: () => {
         // Ensures user queries are reset for other chains txs, since
         // only cosmos txs reset queries from root store
@@ -264,13 +285,15 @@ export const AmountAndReviewScreen = observer(
               assetsInOsmosis={assetsInOsmosis}
               isLoadingAssetsInOsmosis={isLoadingAssetsInOsmosis}
               bridgesSupportedAssets={supportedAssets}
-              supportedBridges={bridges}
+              supportedBridgeInfo={supportedBridgeInfo}
+              hasSupportedChains={hasSupportedChains}
               fromChain={fromChain}
               setFromChain={setFromChain}
               toChain={toChain}
               setToChain={setToChain}
               manualToAddress={manualToAddress}
               setManualToAddress={setManualToAddress}
+              toAddress={toAddress}
               fromAsset={fromAsset}
               setFromAsset={setFromAsset}
               toAsset={toAsset}
@@ -292,8 +315,6 @@ export const AmountAndReviewScreen = observer(
                 toChain &&
                 fromAddress &&
                 toAddress &&
-                fromWalletIcon &&
-                toWalletIcon &&
                 fromAsset &&
                 toAsset && (
                   <ReviewScreen
@@ -342,6 +363,18 @@ export const AmountAndReviewScreen = observer(
                             ? fromChain.chainName
                             : toChain.chainName;
 
+                        let valueUsd = Number(
+                          q.input.fiatValue.toDec().toString()
+                        );
+                        // Protect our data from outliers
+                        // Perhaps from upstream issues with price data providers
+                        if (
+                          isNaN(valueUsd) ||
+                          valueUsd > OUTLIER_USD_VALUE_THRESHOLD
+                        ) {
+                          valueUsd = 0;
+                        }
+
                         logEvent([
                           EventName.DepositWithdraw.started,
                           {
@@ -352,9 +385,7 @@ export const AmountAndReviewScreen = observer(
                             isRecommendedVariant,
                             network: networkName,
                             transferDirection: direction,
-                            valueUsd: Number(
-                              q.input.fiatValue.toDec().toString()
-                            ),
+                            valueUsd,
                             walletName,
                           },
                         ]);

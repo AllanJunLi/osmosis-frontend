@@ -1,11 +1,11 @@
 import { Transition } from "@headlessui/react";
-import { PricePretty } from "@keplr-wallet/unit";
-import { Dec, RatePretty } from "@keplr-wallet/unit";
-import { DEFAULT_VS_CURRENCY } from "@osmosis-labs/server";
-import {
+import type {
   ChartPortfolioOverTimeResponse,
   Range,
-} from "@osmosis-labs/server/src/queries/complex/portfolio/portfolio";
+} from "@osmosis-labs/server";
+import { DEFAULT_VS_CURRENCY } from "@osmosis-labs/server";
+import { PricePretty } from "@osmosis-labs/unit";
+import { Dec, RatePretty } from "@osmosis-labs/unit";
 import classNames from "classnames";
 import dayjs from "dayjs";
 import { AreaData, Time } from "lightweight-charts";
@@ -24,7 +24,6 @@ import {
 import { PortfolioPerformance } from "~/components/complex/portfolio/performance";
 import { DataPoint } from "~/components/complex/portfolio/types";
 import { SkeletonLoader } from "~/components/loaders/skeleton-loader";
-import { useFormatDate } from "~/components/transactions/transaction-utils";
 import { CustomClasses } from "~/components/types";
 import { Button } from "~/components/ui/button";
 import {
@@ -47,6 +46,22 @@ const calculatePortfolioPerformance = (
   selectedDifferencePricePretty: PricePretty;
   totalPriceChange: number;
 } => {
+  // Check if all values are 0, for instance if a user created a new wallet and has no transactions
+  const hasAllZeroValues = data?.every((point) => point.value === 0);
+  if (
+    hasAllZeroValues &&
+    (dataPoint?.value === 0 || dataPoint?.value === undefined)
+  ) {
+    return {
+      selectedPercentageRatePretty: new RatePretty(new Dec(0)),
+      selectedDifferencePricePretty: new PricePretty(
+        DEFAULT_VS_CURRENCY,
+        new Dec(0)
+      ),
+      totalPriceChange: 0,
+    };
+  }
+
   const openingPrice = data?.[0]?.value;
   const openingPriceWithFallback = !openingPrice ? 1 : openingPrice; // handle first value being 0 or undefined
   const selectedDifference = (dataPoint?.value ?? 0) - openingPriceWithFallback;
@@ -87,6 +102,34 @@ const timeToLocal = (originalTime: number) => {
   );
 };
 
+const getLocalizedPortfolioOverTimeData = (
+  portfolioOverTimeData: ChartPortfolioOverTimeResponse[] | undefined
+) => {
+  if (!portfolioOverTimeData) return undefined;
+
+  // If there is only one data point, add 15 more points to the array to create a more accurate line
+  if (portfolioOverTimeData.length <= 1 && portfolioOverTimeData[0]) {
+    const baseDataPoint = portfolioOverTimeData[0];
+    const baseTime =
+      baseDataPoint.value === 0 ? Date.now() / 1000 : baseDataPoint.time;
+    const additionalPoints = Array.from({ length: 15 }, (_, index) => ({
+      time: baseTime - 86400 * (index + 1),
+      value: baseDataPoint.value,
+    }));
+    return [...additionalPoints, baseDataPoint]
+      .sort((a, b) => a.time - b.time)
+      .map((data) => ({
+        time: timeToLocal(data.time),
+        value: data.value,
+      }));
+  }
+
+  return portfolioOverTimeData.map((data) => ({
+    time: timeToLocal(data.time),
+    value: data.value,
+  }));
+};
+
 export const AssetsOverview: FunctionComponent<
   {
     totalValue?: PricePretty;
@@ -104,7 +147,6 @@ export const AssetsOverview: FunctionComponent<
   );
   const { isLoading: isWalletLoading } = useWalletSelect();
   const { isMobile, width } = useWindowSize();
-  const formatDate = useFormatDate();
 
   const address = wallet?.address ?? "";
 
@@ -115,7 +157,7 @@ export const AssetsOverview: FunctionComponent<
     value: undefined,
   });
 
-  const [range, setRange] = useState<Range>("1d");
+  const [range, setRange] = useState<Range>("7d");
 
   const {
     data: portfolioOverTimeData,
@@ -143,30 +185,26 @@ export const AssetsOverview: FunctionComponent<
   const { selectedDifferencePricePretty, selectedPercentageRatePretty } =
     calculatePortfolioPerformance(portfolioOverTimeData, dataPoint);
 
-  const formattedDate = dataPoint.time
-    ? formatDate(dayjs.unix(dataPoint.time as number).format("YYYY-MM-DD"))
-    : undefined;
+  const formattedDate =
+    dataPoint.time && typeof dataPoint.time === "number"
+      ? dayjs(dataPoint.time * 1000).format(
+          range === "1d" || range === "7d" || range === "1mo" ? "lll" : "ll"
+        )
+      : undefined;
 
   const totalDisplayValue =
     dataPoint.value !== undefined
       ? new PricePretty(DEFAULT_VS_CURRENCY, new Dec(dataPoint.value))
       : totalValue?.toString();
 
-  const [_isChartMinimized, setIsChartMinimized] = useLocalStorage(
+  const [isChartMinimized_, setIsChartMinimized] = useLocalStorage(
     "is-portfolio-chart-minimized",
     true
   );
-
-  const isChartMinimized = width < Breakpoint.lg ? false : _isChartMinimized;
+  const isChartMinimized = isChartMinimized_ || width < Breakpoint.lg;
 
   const localizedPortfolioOverTimeData = useMemo(
-    () =>
-      portfolioOverTimeData?.map((data) => {
-        return {
-          time: timeToLocal(data.time),
-          value: data.value,
-        };
-      }),
+    () => getLocalizedPortfolioOverTimeData(portfolioOverTimeData),
     [portfolioOverTimeData]
   );
 
@@ -227,40 +265,51 @@ export const AssetsOverview: FunctionComponent<
               showDate={showDate}
             />
           </SkeletonLoader>
-          <div className="flex items-center gap-3 pt-6">
+          <div className="flex items-center gap-2 pt-6 lg:gap-1">
             <Button
-              className="flex h-[48px] !w-[125px] items-center gap-2 !rounded-full !p-0"
+              className="flex h-[48px] items-center gap-2 !rounded-full md:gap-1"
+              size={isMobile ? "xsm" : undefined}
               onClick={() => startBridge({ direction: "deposit" })}
             >
-              <Icon id="deposit" height={16} width={16} />
-              <div className="subtitle1">{t("assets.table.depositButton")}</div>
+              <Icon
+                id="deposit"
+                height={isMobile ? 12 : 16}
+                width={isMobile ? 12 : 16}
+              />
+              <div className="subtitle1 md:subtitle2">
+                {t("assets.table.depositButton")}
+              </div>
             </Button>
             <Button
-              className="group flex h-[48px] !w-[94px] items-center gap-2 !rounded-full !bg-osmoverse-825 !p-0 text-wosmongton-200 hover:bg-gradient-positive hover:text-black hover:shadow-[0px_0px_30px_4px_rgba(57,255,219,0.2)]"
+              className="group flex h-[48px] items-center gap-2 !rounded-full !bg-osmoverse-825 text-wosmongton-200 hover:bg-gradient-positive hover:text-black hover:shadow-[0px_0px_30px_4px_rgba(57,255,219,0.2)] md:gap-1"
+              size={isMobile ? "xsm" : undefined}
               onClick={fiatRampSelection}
             >
               <CreditCardIcon
                 isAnimated
                 classes={{
+                  container: isMobile ? "!h-4 !w-4" : undefined,
                   backCard: "group-hover:stroke-[2]",
                   frontCard:
                     "group-hover:fill-[#71B5EB] group-hover:stroke-[2]",
                 }}
               />
-              <span className="subtitle1">{t("portfolio.buy")}</span>
+              <span className="subtitle1 md:subtitle2">
+                {t("portfolio.buy")}
+              </span>
             </Button>
             <Button
-              className="flex h-[48px] !w-[141px] items-center gap-2 !rounded-full !bg-osmoverse-825 !p-0 text-wosmongton-200 hover:!bg-osmoverse-800"
+              className="flex h-[48px] items-center gap-2 !rounded-full !bg-osmoverse-825 text-wosmongton-200 hover:!bg-osmoverse-800 md:gap-1"
+              size={isMobile ? "xsm" : undefined}
               onClick={() => startBridge({ direction: "withdraw" })}
               disabled={totalValue && totalValue?.toDec()?.isZero()}
             >
               <Icon
                 id="withdraw"
-                height={16}
-                width={16}
-                className="!h-4 !w-4"
+                height={isMobile ? 12 : 16}
+                width={isMobile ? 12 : 16}
               />
-              <div className="subtitle1">
+              <div className="subtitle1 md:subtitle2">
                 {t("assets.table.withdrawButton")}
               </div>
             </Button>
@@ -275,7 +324,7 @@ export const AssetsOverview: FunctionComponent<
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
           className={classNames(
-            "mt-auto flex h-[156px] w-full flex-col items-end",
+            "mt-auto flex h-[156px] w-full flex-col items-end lg:hidden",
             "w-full max-w-[344px]",
             "xl:w-[383px] xl:max-w-[383px]",
             "lg:w-[312px] lg:max-w-[312px]"
@@ -315,11 +364,11 @@ export const AssetsOverview: FunctionComponent<
         enterTo="opacity-100"
         leave="ease-out duration-[250ms] transition-opacity"
         leaveFrom="opacity-100"
-        leaveTo=" opacity-0"
+        leaveTo="opacity-0"
         as="div"
         unmount={false}
         appear={true}
-        className="absolute top-full w-full"
+        className="absolute top-full w-full lg:hidden"
       >
         <PortfolioHistoricalChart
           setIsChartMinimized={setIsChartMinimized}

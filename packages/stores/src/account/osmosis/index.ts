@@ -1,7 +1,6 @@
 import type { StdFee } from "@cosmjs/amino";
 import type { EncodeObject } from "@cosmjs/proto-signing";
 import { AppCurrency, Currency } from "@keplr-wallet/types";
-import { Coin, CoinPretty, Dec, DecUtils, Int } from "@keplr-wallet/unit";
 import {
   ChainGetter,
   CosmosQueries,
@@ -10,7 +9,6 @@ import {
 import * as OsmosisMath from "@osmosis-labs/math";
 import { maxTick, minTick } from "@osmosis-labs/math";
 import {
-  makeAddAuthenticatorMsg,
   makeAddToConcentratedLiquiditySuperfluidPositionMsg,
   makeAddToPositionMsg,
   makeBeginUnlockingMsg,
@@ -27,7 +25,6 @@ import {
   makeJoinSwapExternAmountInMsg,
   makeLockAndSuperfluidDelegateMsg,
   makeLockTokensMsg,
-  makeRemoveAuthenticatorMsg,
   makeSetValidatorSetPreferenceMsg,
   makeSplitRoutesSwapExactAmountInMsg,
   makeSplitRoutesSwapExactAmountOutMsg,
@@ -42,6 +39,7 @@ import {
   makeWithdrawPositionMsg,
 } from "@osmosis-labs/tx";
 import { BondStatus } from "@osmosis-labs/types";
+import { Coin, CoinPretty, Dec, DecUtils, Int } from "@osmosis-labs/unit";
 import Long from "long";
 
 import { AccountStore, CosmosAccount, CosmwasmAccount } from "../../account";
@@ -51,6 +49,7 @@ import { DeliverTxResponse, SignOptions } from "../types";
 import { findNewClPositionId } from "./tx-response";
 
 const DEFAULT_SLIPPAGE = "2.5";
+const HIGH_DEFAULT_SLIPPAGE = "15";
 
 export interface OsmosisAccount {
   osmosis: OsmosisAccountImpl;
@@ -1414,7 +1413,7 @@ export class OsmosisAccountImpl {
    * https://docs.osmosis.zone/developing/modules/spec-gamm.html#exit-pool
    * @param poolId Id of pool to exit.
    * @param shareInAmount LP shares to redeem.
-   * @param maxSlippage Max tolerated slippage. Default: 2.5.
+   * @param maxSlippage Max tolerated slippage. Default: 2.5, 15 with high precision amounts.
    * @param memo Transaction memo.
    * @param onFulfill Callback to handle tx fullfillment given raw response.
    */
@@ -1443,6 +1442,12 @@ export class OsmosisAccountImpl {
       shareInAmount,
       makeExitPoolMsg.shareCoinDecimals
     );
+
+    // If the token amount is very large, indicating high precision,
+    // increase slippage tolerance to allow for the high precision.
+    if (poolAssets.some(({ amount }) => amount.length > 18)) {
+      maxSlippage = HIGH_DEFAULT_SLIPPAGE;
+    }
 
     const maxSlippageDec = new Dec(maxSlippage).quo(
       DecUtils.getTenExponentNInPrecisionRange(2)
@@ -1698,7 +1703,7 @@ export class OsmosisAccountImpl {
       lockIds.map(async (lockId) => {
         return makeBeginUnlockingMsg({
           owner: this.address,
-          ID: BigInt(lockId),
+          iD: BigInt(lockId),
           coins: [],
         });
       })
@@ -1754,7 +1759,7 @@ export class OsmosisAccountImpl {
         msgs.push(
           await makeBeginUnlockingMsg({
             owner: this.address,
-            ID: BigInt(lock.lockId),
+            iD: BigInt(lock.lockId),
             coins: [],
           })
         );
@@ -2171,154 +2176,6 @@ export class OsmosisAccountImpl {
       this.chainId,
       "withdrawDelegationRewardsAndSendDelegateToValidatorSet",
       [withdrawDelegationRewardsMsg, delegateToValidatorSetMsg],
-      memo,
-      undefined,
-      undefined,
-      (tx) => {
-        if (!tx.code) {
-          // Refresh the balances
-          const queries = this.queriesStore.get(this.chainId);
-
-          queries.queryBalances
-            .getQueryBech32Address(this.address)
-            .balances.forEach((balance) => balance.waitFreshResponse());
-
-          queries.cosmos.queryDelegations
-            .getQueryBech32Address(this.address)
-            .waitFreshResponse();
-
-          queries.cosmos.queryRewards
-            .getQueryBech32Address(this.address)
-            .waitFreshResponse();
-        }
-        onFulfill?.(tx);
-      }
-    );
-  }
-
-  async sendAddOrRemoveAuthenticatorsMsg({
-    addAuthenticators,
-    removeAuthenticators,
-    memo = "",
-    onFulfill,
-    onBroadcasted,
-    signOptions,
-  }: {
-    addAuthenticators: { type: string; data: Uint8Array }[];
-    removeAuthenticators: bigint[];
-    memo?: string;
-    onFulfill?: (tx: DeliverTxResponse) => void;
-    onBroadcasted?: () => void;
-    signOptions?: SignOptions;
-  }) {
-    const addAuthenticatorMsgs = addAuthenticators.map((authenticator) =>
-      makeAddAuthenticatorMsg({
-        type: authenticator.type,
-        data: authenticator.data,
-        sender: this.address,
-      })
-    );
-    const removeAuthenticatorMsgs = removeAuthenticators.map((id) =>
-      makeRemoveAuthenticatorMsg({
-        id,
-        sender: this.address,
-      })
-    );
-    const msgs = await Promise.all([
-      ...removeAuthenticatorMsgs,
-      ...addAuthenticatorMsgs,
-    ]);
-
-    await this.base.signAndBroadcast(
-      this.chainId,
-      "addOrRemoveAuthenticators",
-      msgs,
-      memo,
-      undefined,
-      signOptions,
-      {
-        onBroadcasted,
-        onFulfill: (tx) => {
-          if (!tx.code) {
-            // Refresh the balances
-            const queries = this.queriesStore.get(this.chainId);
-
-            queries.queryBalances
-              .getQueryBech32Address(this.address)
-              .balances.forEach((balance) => balance.waitFreshResponse());
-
-            queries.cosmos.queryDelegations
-              .getQueryBech32Address(this.address)
-              .waitFreshResponse();
-
-            queries.cosmos.queryRewards
-              .getQueryBech32Address(this.address)
-              .waitFreshResponse();
-          }
-          onFulfill?.(tx);
-        },
-      }
-    );
-  }
-
-  async sendAddAuthenticatorsMsg(
-    authenticators: { type: string; data: any }[],
-    memo: string = "",
-    onFulfill?: (tx: DeliverTxResponse) => void
-  ) {
-    const addAuthenticatorMsgs = await Promise.all(
-      authenticators.map((authenticator) =>
-        makeAddAuthenticatorMsg({
-          type: authenticator.type,
-          data: authenticator.data,
-          sender: this.address,
-        })
-      )
-    );
-
-    await this.base.signAndBroadcast(
-      this.chainId,
-      "addAuthenticator",
-      addAuthenticatorMsgs,
-      memo,
-      undefined,
-      undefined,
-      (tx) => {
-        if (!tx.code) {
-          // Refresh the balances
-          const queries = this.queriesStore.get(this.chainId);
-
-          queries.queryBalances
-            .getQueryBech32Address(this.address)
-            .balances.forEach((balance) => balance.waitFreshResponse());
-
-          queries.cosmos.queryDelegations
-            .getQueryBech32Address(this.address)
-            .waitFreshResponse();
-
-          queries.cosmos.queryRewards
-            .getQueryBech32Address(this.address)
-            .waitFreshResponse();
-        }
-        onFulfill?.(tx);
-      }
-    );
-  }
-
-  async sendRemoveAuthenticatorMsg(
-    id: bigint,
-    memo: string = "",
-    onFulfill?: (tx: DeliverTxResponse) => void
-  ) {
-    const removeAuthenticatorMsg = await makeRemoveAuthenticatorMsg({
-      id: id,
-      sender: this.address,
-    });
-
-    await this.base.signAndBroadcast(
-      this.chainId,
-      "removeAuthenticator",
-      [removeAuthenticatorMsg],
       memo,
       undefined,
       undefined,

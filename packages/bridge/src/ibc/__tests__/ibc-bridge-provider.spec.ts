@@ -271,6 +271,7 @@ describe("IbcBridgeProvider", () => {
             "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2",
           decimals: 6,
         },
+        direction: "deposit",
       });
 
       expect(supportedAssets).toEqual([
@@ -280,6 +281,7 @@ describe("IbcBridgeProvider", () => {
           denom: "ATOM",
           address: "uatom",
           decimals: 6,
+          transferTypes: ["quote"],
         },
       ]);
     });
@@ -329,7 +331,7 @@ describe("IbcBridgeProvider.getExternalUrl", () => {
 
   it("should generate the correct URL for given parameters", async () => {
     const expectedUrl =
-      "https://geo.tfm.com/?chainFrom=osmosis-1&token0=uosmo&chainTo=cosmoshub-4&token1=uatom";
+      "https://app.tfm.com/?chainFrom=osmosis-1&token0=uosmo&chainTo=cosmoshub-4&token1=uatom";
     const result = await provider.getExternalUrl({
       fromChain: { chainId: "osmosis-1", chainType: "cosmos" },
       toChain: { chainId: "cosmoshub-4", chainType: "cosmos" },

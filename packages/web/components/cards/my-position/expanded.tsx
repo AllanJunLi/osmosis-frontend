@@ -1,9 +1,9 @@
-import { CoinPretty, Dec, PricePretty } from "@keplr-wallet/unit";
 import type {
   PositionHistoricalPerformance,
   UserPosition,
   UserPositionDetails,
 } from "@osmosis-labs/server";
+import { CoinPretty, Dec, PricePretty } from "@osmosis-labs/unit";
 import classNames from "classnames";
 import moment from "dayjs";
 import { observer } from "mobx-react-lite";
@@ -161,7 +161,7 @@ export const MyPositionCardExpandedSection: FunctionComponent<{
     return (
       <div className="flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex w-full gap-1 xl:hidden">
-          <div className="flex h-[20.1875rem] flex-grow flex-col gap-[20px] rounded-l-2xl bg-osmoverse-700 py-7 pl-6">
+          <div className="flex h-[20.1875rem] w-full flex-col gap-[20px] rounded-l-2xl bg-osmoverse-700 py-7 pl-6">
             {chartConfig.isHistoricalDataLoading ? (
               <Spinner className="m-auto" />
             ) : !chartConfig.historicalChartUnavailable ? (
@@ -444,7 +444,7 @@ const PositionButton: FunctionComponent<ComponentProps<typeof Button>> = (
   );
 };
 
-const AssetsInfo: FunctionComponent<
+export const AssetsInfo: FunctionComponent<
   {
     title: string;
     assets?: CoinPretty[];
@@ -479,7 +479,7 @@ const AssetsInfo: FunctionComponent<
                     )}
                   </div>
                   <span className="whitespace-nowrap">
-                    {formatPretty(asset, { maxDecimals: 2 })}
+                    {formatPretty(asset, { maxDecimals: 6 })}
                   </span>
                 </div>
               ))}

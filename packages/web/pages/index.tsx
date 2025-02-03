@@ -1,15 +1,23 @@
 import dayjs from "dayjs";
 import { observer } from "mobx-react-lite";
 import Image from "next/image";
+import { useRouter } from "next/router";
 import { useLocalStorage } from "react-use";
 
 import { AdBanners } from "~/components/ad-banner";
+import {
+  AssetHighlights,
+  highlightPrice24hChangeAsset,
+} from "~/components/assets/highlights-categories";
+import { ClientOnly } from "~/components/client-only";
 import { ErrorBoundary } from "~/components/error/error-boundary";
-import { ProgressiveSvgImage } from "~/components/progressive-svg-image";
-import { SwapTool } from "~/components/swap-tool";
 import { TradeTool } from "~/components/trade-tool";
 import { EventName } from "~/config";
-import { useAmplitudeAnalytics, useFeatureFlags, useNavBar } from "~/hooks";
+import {
+  useAmplitudeAnalytics,
+  useFeatureFlags,
+  useTranslation,
+} from "~/hooks";
 import { api } from "~/utils/trpc";
 
 export const SwapPreviousTradeKey = "swap-previous-trade";
@@ -22,12 +30,6 @@ export type PreviousTrade = {
 
 const Home = () => {
   const featureFlags = useFeatureFlags();
-  if (!featureFlags._isInitialized) return null;
-  return featureFlags.limitOrders ? <HomeNew /> : <HomeV1 />;
-};
-
-const HomeNew = () => {
-  const featureFlags = useFeatureFlags();
 
   const [previousTrade, setPreviousTrade] =
     useLocalStorage<PreviousTrade>(SwapPreviousTradeKey);
@@ -36,10 +38,8 @@ const HomeNew = () => {
     onLoadEvent: [EventName.Swap.pageViewed, { isOnHome: true }],
   });
 
-  useNavBar({ title: " " });
-
   return (
-    <main className="relative flex h-full overflow-auto pb-2 pt-8">
+    <main className="relative flex overflow-auto pb-2 pt-8 h-content md:h-content-mobile">
       <div className="fixed inset-0 h-full w-full overflow-y-scroll bg-cover xl:static">
         <div className="relative h-full w-full xl:hidden">
           <Image
@@ -53,11 +53,15 @@ const HomeNew = () => {
         <div className="absolute inset-0 top-[104px] flex h-auto w-full justify-center md:top-0">
           <div className="flex w-[512px] flex-col gap-4 lg:mx-auto md:mt-5 md:w-full md:px-5">
             {featureFlags.swapsAdBanner && <SwapAdsBanner />}
-            <TradeTool
-              page="Swap Page"
-              previousTrade={previousTrade}
-              setPreviousTrade={setPreviousTrade}
-            />
+            {/** Hydration issues need to be investigated before this client wrapper can be removed. */}
+            <ClientOnly>
+              <TradeTool
+                page="Swap Page"
+                previousTrade={previousTrade}
+                setPreviousTrade={setPreviousTrade}
+              />
+            </ClientOnly>
+            {featureFlags.swapToolTopGainers && <TopGainers />}
           </div>
         </div>
       </div>
@@ -65,66 +69,32 @@ const HomeNew = () => {
   );
 };
 
-const HomeV1 = () => {
-  const featureFlags = useFeatureFlags();
-  const [previousTrade, setPreviousTrade] =
-    useLocalStorage<PreviousTrade>(SwapPreviousTradeKey);
+const TopGainers = () => {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const { logEvent } = useAmplitudeAnalytics();
 
-  useAmplitudeAnalytics({
-    onLoadEvent: [EventName.Swap.pageViewed, { isOnHome: true }],
-  });
+  const { data: topGainerAssets, isLoading: isTopGainerAssetsLoading } =
+    api.edge.assets.getTopGainerAssets.useQuery({
+      topN: 4,
+    });
 
   return (
-    <main className="relative flex h-full items-center overflow-auto py-2">
-      <div className="pointer-events-none fixed h-full w-full bg-home-bg-pattern bg-cover bg-repeat-x">
-        <svg
-          className="absolute h-full w-full lg:hidden"
-          pointerEvents="none"
-          viewBox="0 0 1300 900"
-          height="900"
-          preserveAspectRatio="xMidYMid slice"
-        >
-          <g>
-            <ProgressiveSvgImage
-              lowResXlinkHref="/images/osmosis-home-bg-low.png"
-              xlinkHref="/images/osmosis-home-bg.png"
-              x="56"
-              y="220"
-              width="578.7462"
-              height="725.6817"
-            />
-            <ProgressiveSvgImage
-              lowResXlinkHref={"/images/bitcoin-props-low.png"}
-              xlinkHref={"/images/bitcoin-props.png"}
-              x={"61"}
-              y={"600"}
-              width={"448.8865"}
-              height={"285.1699"}
-            />
-          </g>
-        </svg>
-      </div>
-      <div className="my-auto flex h-auto w-full items-center">
-        <div className="ml-auto mr-[15%] flex w-[27rem] flex-col gap-4 lg:mx-auto md:mt-mobile-header">
-          {featureFlags.swapsAdBanner && <SwapAdsBanner />}
-          <SwapTool
-            useQueryParams
-            useOtherCurrencies
-            onSwapSuccess={({ sendTokenDenom, outTokenDenom }) => {
-              setPreviousTrade({
-                sendTokenDenom,
-                outTokenDenom,
-                baseDenom: previousTrade?.baseDenom ?? "",
-                quoteDenom: previousTrade?.quoteDenom ?? "",
-              });
-            }}
-            initialSendTokenDenom={previousTrade?.sendTokenDenom}
-            initialOutTokenDenom={previousTrade?.outTokenDenom}
-            page="Swap Page"
-          />
-        </div>
-      </div>
-    </main>
+    <AssetHighlights
+      className="bg-osmoverse-1000/40 px-2"
+      title={t("assets.highlights.topGainers")}
+      subtitle="24h"
+      isLoading={isTopGainerAssetsLoading}
+      assets={(topGainerAssets ?? []).map(highlightPrice24hChangeAsset)}
+      onClickSeeAll={() => {
+        logEvent([EventName.Swap.checkTopGainers, { token: "All" }]);
+        router.push(`/assets?category=topGainers`);
+      }}
+      onClickAsset={(asset) => {
+        logEvent([EventName.Swap.checkTopGainers, { token: asset.coinDenom }]);
+      }}
+      highlight="topGainers"
+    />
   );
 };
 

@@ -1,5 +1,5 @@
-import { IntPretty } from "@keplr-wallet/unit";
 import type { Pool } from "@osmosis-labs/server";
+import { IntPretty } from "@osmosis-labs/unit";
 import classNames from "classnames";
 import { observer } from "mobx-react-lite";
 import Link from "next/link";
@@ -95,6 +95,7 @@ export const BasePoolDetails: FunctionComponent<{
                   amount: coin,
                 }))}
                 totalWeight={new IntPretty(pool.reserveCoins.length)}
+                hideWeights={pool.type === "concentrated"}
               />
             </div>
           </div>

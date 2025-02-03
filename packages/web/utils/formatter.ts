@@ -1,3 +1,4 @@
+import { trimZerosFromEnd } from "@osmosis-labs/stores";
 import {
   CoinPretty,
   Dec,
@@ -5,8 +6,7 @@ import {
   IntPretty,
   PricePretty,
   RatePretty,
-} from "@keplr-wallet/unit";
-import { trimZerosFromEnd } from "@osmosis-labs/stores";
+} from "@osmosis-labs/unit";
 
 import {
   getDecimalCount,
@@ -217,19 +217,6 @@ function hasIntlFormatOptions(opts: FormatOptions) {
   if ("scientificMagnitudeThreshold" in copy)
     delete copy.scientificMagnitudeThreshold;
   return Object.keys(copy).length > 0;
-}
-
-/** Formats a coin with given decimals depending on if coin amount is greater or less than one.
- *  Ex: `1.23` at 2 decimals or `0.000023` at 6 decimals. Default: above 2, below 6. */
-export function formatCoinMaxDecimalsByOne(
-  coin?: CoinPretty,
-  aboveOneMaxDecimals = 2,
-  belowOneMaxDecimals = 6
-) {
-  if (!coin) return "";
-  return coin.toDec().gt(new Dec(1))
-    ? coin.maxDecimals(aboveOneMaxDecimals).trim(true).toString()
-    : coin.maxDecimals(belowOneMaxDecimals).trim(true).toString();
 }
 
 /**

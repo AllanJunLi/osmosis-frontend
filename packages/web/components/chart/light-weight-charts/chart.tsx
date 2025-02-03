@@ -11,6 +11,7 @@ import {
 import React, {
   memo,
   PropsWithChildren,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -38,7 +39,7 @@ function resizeSubscribe(callback: (this: Window, ev: UIEvent) => unknown) {
   };
 }
 
-export const defaultOptions: DeepPartial<TimeChartOptions> = {
+const defaultOptions: DeepPartial<TimeChartOptions> = {
   layout: {
     fontFamily: theme.fontFamily.caption.join(","),
     background: {
@@ -189,13 +190,14 @@ const defaultOptionsWithSeries = (
   },
 });
 
-export interface ChartProps<T extends TimeChartOptions, K extends Time> {
+interface ChartProps<T extends TimeChartOptions, K extends Time> {
   options?: DeepPartial<T>;
   series?: Series[];
   Controller: new (
     params: ChartControllerParams<TimeChartOptions, K>
   ) => ChartController<TimeChartOptions, K>;
   onCrosshairMove?: (params: MouseEventParams<K>) => void;
+  onDataPointHover?: (params: MouseEventParams<K>) => void;
 }
 
 export const Chart = memo(
@@ -207,10 +209,25 @@ export const Chart = memo(
       children,
       series,
       onCrosshairMove,
+      onDataPointHover,
       Controller,
     } = props;
     const [container, setContainer] = useState<HTMLDivElement | null>(null);
     const chart = useRef<ChartController<TimeChartOptions, K>>();
+    const lastHoverDataPointLogicalIndex =
+      useRef<MouseEventParams<K>["logical"]>(undefined);
+
+    const onCrosshairMoveInternal = useCallback(
+      (params: MouseEventParams<K>) => {
+        onCrosshairMove?.(params);
+
+        if (lastHoverDataPointLogicalIndex.current !== params.logical) {
+          onDataPointHover?.(params);
+        }
+        lastHoverDataPointLogicalIndex.current = params.logical;
+      },
+      [onCrosshairMove, onDataPointHover]
+    );
 
     useSyncExternalStore(
       resizeSubscribe,
@@ -228,7 +245,7 @@ export const Chart = memo(
         },
         series,
         container,
-        onCrosshairMove,
+        onCrosshairMove: onCrosshairMoveInternal,
       });
     }
 

@@ -7,7 +7,7 @@ import { CosmosWalletRegistry } from "~/config/wallet-registry";
 import { useConnectEvmWallet } from "~/hooks/evm-wallet";
 
 export const WagmiWalletConnectType = "walletConnect";
-export const WagmiMetamaskSdkType = "metaMask";
+const WagmiMetamaskSdkType = "metaMask";
 
 export function getDisplayableEvmConnector<T extends Connector>(wallet: T): T {
   const newWallet = { ...wallet } as Mutable<T>;
@@ -122,6 +122,23 @@ export const useSelectableWallets = ({
               return array
                 .filter(
                   (wallet) => wallet.name === AvailableCosmosWallets.Keplr
+                )
+                .map((wallet) => ({ ...wallet, mobileDisabled: false }));
+            }
+
+            /**
+             * If on mobile and `cosmostation` is in `window`, it means that the user enters
+             * the frontend from Cosmostation's app in app browser. So, there is no need
+             * to use wallet connect, as it resembles the extension's usage.
+             */
+            if (
+              _window?.cosmostation &&
+              _window?.cosmostation?.mode === mobileWebModeName
+            ) {
+              return array
+                .filter(
+                  (wallet) =>
+                    wallet.name === AvailableCosmosWallets.Cosmostation
                 )
                 .map((wallet) => ({ ...wallet, mobileDisabled: false }));
             }

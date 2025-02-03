@@ -1,5 +1,5 @@
-import { Int } from "@keplr-wallet/unit";
 import { Chain } from "@osmosis-labs/types";
+import { Int } from "@osmosis-labs/unit";
 import { ChainIdHelper, getChain } from "@osmosis-labs/utils";
 
 import { queryRPCStatus } from "../../queries/cosmos";
@@ -54,7 +54,7 @@ export async function getTimeoutHeight({
      * Omit the revision_number if the chain's version is 0.
      * Sending the value as 0 will cause the transaction to fail.
      */
-    revisionNumber: revisionNumber !== "0" ? revisionNumber : undefined,
+    ...(revisionNumber !== "0" && { revisionNumber }),
     revisionHeight: new Int(latestBlockHeight).add(new Int("150")).toString(),
   };
 }

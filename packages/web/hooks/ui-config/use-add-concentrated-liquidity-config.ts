@@ -1,11 +1,3 @@
-import {
-  CoinPretty,
-  Dec,
-  DecUtils,
-  Int,
-  PricePretty,
-  RatePretty,
-} from "@keplr-wallet/unit";
 import { AmountConfig } from "@osmosis-labs/keplr-hooks";
 import {
   ChainGetter,
@@ -31,6 +23,14 @@ import {
   OsmosisQueries,
   PriceConfig,
 } from "@osmosis-labs/stores";
+import {
+  CoinPretty,
+  Dec,
+  DecUtils,
+  Int,
+  PricePretty,
+  RatePretty,
+} from "@osmosis-labs/unit";
 import { action, autorun, computed, makeObservable, observable } from "mobx";
 import { useCallback, useEffect, useState } from "react";
 
@@ -61,7 +61,7 @@ export function useAddConcentratedLiquidityConfig(
   const address = account?.address ?? "";
 
   const { data: pool, isFetched: isPoolFetched } =
-    api.edge.pools.getPool.useQuery(
+    api.local.pools.getPool.useQuery(
       { poolId },
       {
         refetchInterval: 5_000, // 5 seconds
@@ -266,8 +266,8 @@ export function useAddConcentratedLiquidityConfig(
   return { config, addLiquidity, increaseLiquidity };
 }
 
-export const MODERATE_STRATEGY_MULTIPLIER = 0.25;
-export const AGGRESSIVE_STRATEGY_MULTIPLIER = 0.05;
+const MODERATE_STRATEGY_MULTIPLIER = 0.25;
+const AGGRESSIVE_STRATEGY_MULTIPLIER = 0.05;
 
 /** Use to config user input UI for eventually sending a valid add concentrated liquidity msg.
  */
